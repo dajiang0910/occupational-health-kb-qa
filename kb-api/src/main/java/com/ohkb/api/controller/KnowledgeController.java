@@ -1,5 +1,6 @@
 package com.ohkb.api.controller;
 
+import com.ohkb.core.knowledge.ExcelImportService;
 import com.ohkb.core.knowledge.KnowledgeArticle;
 import com.ohkb.core.knowledge.KnowledgeService;
 import org.springframework.http.ResponseEntity;
@@ -7,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -18,9 +20,12 @@ import java.util.Map;
 public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
+    private final ExcelImportService excelImportService;
 
-    public KnowledgeController(KnowledgeService knowledgeService) {
+    public KnowledgeController(KnowledgeService knowledgeService,
+                                ExcelImportService excelImportService) {
         this.knowledgeService = knowledgeService;
+        this.excelImportService = excelImportService;
     }
 
     /**
@@ -69,6 +74,36 @@ public class KnowledgeController {
     public ResponseEntity<Map<String, String>> deleteArticle(@PathVariable Long id) {
         knowledgeService.deleteArticle(id);
         return ResponseEntity.ok(Map.of("status", "ok", "message", "知识条目已删除"));
+    }
+
+    /**
+     * 批量导入 FAQ Excel。
+     */
+    @PostMapping("/articles/batch-import")
+    public ResponseEntity<Map<String, Object>> batchImport(
+            @RequestParam("file") MultipartFile file
+    ) throws IOException {
+        var entries = excelImportService.parseExcel(file);
+
+        List<KnowledgeArticle> created = new ArrayList<>();
+        int failed = 0;
+        for (var entry : entries) {
+            try {
+                var article = knowledgeService.createArticle(
+                        entry.question(), entry.answer(), entry.category(),
+                        entry.tags(), "batch_import");
+                created.add(article);
+            } catch (Exception e) {
+                failed++;
+            }
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "status", "ok",
+                "total", entries.size(),
+                "imported", created.size(),
+                "failed", failed
+        ));
     }
 
     /**

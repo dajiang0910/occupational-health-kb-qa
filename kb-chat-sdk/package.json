@@ -2,7 +2,19 @@
   "name": "ohkb-chat-sdk",
   "version": "0.1.0",
   "private": true,
+  "description": "嵌入式AI聊天组件 SDK — 主 SaaS 系统通过 iframe 集成智能问答窗口",
   "type": "module",
+  "main": "./dist/ohkb-chat-sdk.umd.js",
+  "module": "./dist/ohkb-chat-sdk.es.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/ohkb-chat-sdk.es.js",
+      "require": "./dist/ohkb-chat-sdk.umd.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "files": ["dist"],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -11,7 +23,8 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-markdown": "^9.0.0"
+    "react-markdown": "^9.0.0",
+    "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
