@@ -1,0 +1,74 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:15-pgvector:///ohkb_test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  sql:
+    init:
+      mode: never
+
+app:
+  jwt:
+    secret: test-secret-key-for-integration-tests
+    expiration-minutes: 5
+  rag:
+    confidence:
+      llm-weight: 0.4
+      retrieval-weight: 0.6
+      thresholds:
+        factual: 0.80
+        howto: 0.65
+        troubleshoot: 0.50
+    retriever:
+      top-k: 20
+      similarity-threshold: 0.7
+      reranker-min-similarity: 0.8
+      reranker-top-n: 5
+    token-budget:
+      system-prompt: 500
+      retrieved-docs: 2000
+      chat-history: 2000
+      current-answer: 1500
+  cache:
+    semantic:
+      enabled: true
+      high-threshold: 0.92
+      low-threshold: 0.85
+      ttl-minutes: 30
+  degrade:
+    max-consecutive-failures: 3
+    llm-probe-interval-seconds: 30
+  wechat:
+    user-window-minutes: 5
+    thread-ttl-minutes: 30
+    max-threads-per-group: 50
+    degrade:
+      max-consecutive-mistriggers: 3
+      mistrigger-window-minutes: 10
+
+# Mock LLM — no real API key needed for integration tests
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: http://localhost:9999/v1
+      api-key: test-key
+      model-name: qwen-plus
+      temperature: 0.7
+      max-tokens: 2048
+      timeout: 5s
+      max-retries: 0
+    embedding-model:
+      base-url: http://localhost:9999/v1
+      api-key: test-key
+      model-name: text-embedding-v3
+
+wechat:
+  token: test-token
+  encoding-aes-key: abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG
+  corp-id: test-corp-id
+
+logging:
+  level:
+    com.ohkb: DEBUG

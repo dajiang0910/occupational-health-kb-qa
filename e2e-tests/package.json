@@ -1,0 +1,14 @@
+{
+  "name": "ohkb-e2e-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "E2E smoke tests for occupational-health-kb-qa",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0"
+  }
+}
