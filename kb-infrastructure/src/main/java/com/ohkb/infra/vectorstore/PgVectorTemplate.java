@@ -139,6 +139,16 @@ public class PgVectorTemplate {
     }
 
     /**
+     * 更新知识条目的 Embedding 向量。
+     */
+    public void updateArticleEmbedding(Long articleId, String vectorStr) {
+        jdbc.update("""
+            UPDATE knowledge_articles SET embedding = ?::vector, updated_at = NOW()
+            WHERE id = ?
+            """, vectorStr, articleId);
+    }
+
+    /**
      * 语义缓存数量。
      */
     public long countCache() {
@@ -152,6 +162,12 @@ public class PgVectorTemplate {
         @Override
         public KnowledgeArticle mapRow(ResultSet rs, int rowNum) throws SQLException {
             String[] tagArray = (String[]) rs.getArray("tags").getArray();
+            double similarity = 0.0;
+            try {
+                similarity = rs.getDouble("similarity");
+            } catch (SQLException e) {
+                // similarity column only present in vector search queries
+            }
             return new KnowledgeArticle(
                     rs.getLong("id"),
                     rs.getString("title"),
@@ -172,7 +188,8 @@ public class PgVectorTemplate {
                     rs.getInt("helpful_count"),
                     rs.getInt("unhelpful_count"),
                     rs.getTimestamp("created_at").toInstant(),
-                    rs.getTimestamp("updated_at").toInstant()
+                    rs.getTimestamp("updated_at").toInstant(),
+                    similarity
             );
         }
     }

@@ -3,7 +3,9 @@ package com.ohkb.core.knowledge;
 import com.ohkb.core.chat.SemanticCacheService;
 import com.ohkb.infra.document.DocumentParser;
 import com.ohkb.infra.document.EmbeddingService;
+import com.ohkb.infra.vectorstore.ImportedDocumentRepository;
 import com.ohkb.infra.vectorstore.KnowledgeArticleRepository;
+import com.ohkb.infra.vectorstore.PgVectorTemplate;
 import dev.langchain4j.data.segment.TextSegment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,18 +33,24 @@ public class KnowledgeService {
     private final DocumentParser documentParser;
     private final EmbeddingService embeddingService;
     private final SemanticCacheService cacheService;
+    private final PgVectorTemplate pgVectorTemplate;
+    private final ImportedDocumentRepository documentRepo;
     private final Path uploadDir;
 
     public KnowledgeService(
             KnowledgeArticleRepository articleRepo,
             DocumentParser documentParser,
             EmbeddingService embeddingService,
-            SemanticCacheService cacheService
+            SemanticCacheService cacheService,
+            PgVectorTemplate pgVectorTemplate,
+            ImportedDocumentRepository documentRepo
     ) throws IOException {
         this.articleRepo = articleRepo;
         this.documentParser = documentParser;
         this.embeddingService = embeddingService;
         this.cacheService = cacheService;
+        this.pgVectorTemplate = pgVectorTemplate;
+        this.documentRepo = documentRepo;
         this.uploadDir = Files.createTempDirectory("ohkb-uploads");
     }
 
@@ -56,17 +64,21 @@ public class KnowledgeService {
         long size = file.getSize();
 
         ImportedDocument doc = ImportedDocument.create(filename, fileType, size);
-        // TODO: 持久化 imported_documents 表
-        log.info("[KB] Document uploaded: {} ({} bytes)", filename, size);
+        ImportedDocument saved = documentRepo.save(doc);
+        log.info("[KB] Document uploaded: id={}, filename={}, size={} bytes",
+                saved.id(), filename, size);
+
+        // 更新状态为 parsing
+        documentRepo.updateStatus(saved.id(), "parsing");
 
         // 保存到临时目录
         Path filePath = uploadDir.resolve(UUID.randomUUID() + "_" + filename);
         file.transferTo(filePath);
 
         // 异步解析和嵌入
-        processDocumentAsync(doc, filePath, category);
+        processDocumentAsync(saved, filePath, category);
 
-        return doc;
+        return saved;
     }
 
     /**
@@ -76,7 +88,10 @@ public class KnowledgeService {
     @Transactional
     public void processDocumentAsync(ImportedDocument doc, Path filePath, String category) {
         try {
-            log.info("[KB] Processing document: {}", doc.filename());
+            log.info("[KB] Processing document: id={}, filename={}", doc.id(), doc.filename());
+
+            // 状态：parsing → chunking
+            documentRepo.updateStatus(doc.id(), "chunking");
 
             // 解析 + 结构感知分块
             List<TextSegment> segments = documentParser.parse(filePath);
@@ -86,17 +101,26 @@ public class KnowledgeService {
                     .filter(s -> "parse_failed".equals(s.metadata().getString("chunkStatus")))
                     .count();
 
+            // 状态：chunking → embedding
+            documentRepo.updateStatus(doc.id(), "embedding");
+
             // 生成 Embedding 并存储
             int stored = embeddingService.embedAndStore(segments, category, doc.id(), "document_import");
 
-            log.info("[KB] Document processed: {} chunks stored, {} failed", stored, failedCount);
+            // 状态：embedding → completed
+            documentRepo.updateProcessingResult(doc.id(), "completed", stored, (int) failedCount);
+
+            log.info("[KB] Document processed: id={}, {} chunks stored, {} failed",
+                    doc.id(), stored, failedCount);
 
             // 清理临时文件
             Files.deleteIfExists(filePath);
 
         } catch (Exception e) {
-            log.error("[KB] Document processing failed: {}", doc.filename(), e);
-            // TODO: 更新 imported_documents 状态为 failed
+            log.error("[KB] Document processing failed: id={}, filename={}",
+                    doc.id(), doc.filename(), e);
+            documentRepo.updateError(doc.id(), e.getMessage(),
+                    "Processing failed at " + java.time.Instant.now());
         }
     }
 
@@ -137,7 +161,7 @@ public class KnowledgeService {
                 existing.chunkIndex(), existing.chunkStatus(), existing.embeddingModel(),
                 existing.effectiveFrom(), existing.effectiveUntil(), existing.isDeprecated(),
                 existing.hitCount(), existing.helpfulCount(), existing.unhelpfulCount(),
-                existing.createdAt(), java.time.Instant.now()
+                existing.createdAt(), java.time.Instant.now(), existing.similarity()
         );
         KnowledgeArticle saved = articleRepo.save(updated);
         log.info("[KB] Article updated: id={}", id);
@@ -180,8 +204,16 @@ public class KnowledgeService {
 
     @Async
     void generateEmbeddingAsync(Long articleId, String content) {
-        // Phase 2: 异步生成单条 embedding
-        log.debug("[KB] Embedding generation queued for articleId={}", articleId);
+        try {
+            log.debug("[KB] Generating embedding for articleId={}", articleId);
+            var embedding = embeddingService.embedQuery(content);
+            String vectorStr = EmbeddingService.embeddingToPgvectorString(embedding);
+            pgVectorTemplate.updateArticleEmbedding(articleId, vectorStr);
+            log.info("[KB] Embedding stored for articleId={}", articleId);
+        } catch (Exception e) {
+            log.error("[KB] Embedding generation failed for articleId={}: {}", articleId, e.getMessage());
+            // TODO: dead letter 表记录失败任务
+        }
     }
 
     private String getFileType(String filename) {

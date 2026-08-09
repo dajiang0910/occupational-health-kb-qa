@@ -29,14 +29,15 @@ public record KnowledgeArticle(
         Integer helpfulCount,
         Integer unhelpfulCount,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Double similarity  // 向量检索时的余弦相似度（非持久化字段，仅查询时填充）
 ) {
     public static KnowledgeArticle create(String title, String content, String category,
                                           String sourceType, List<String> tags) {
         return new KnowledgeArticle(
                 null, title, content, null, category, tags != null ? tags : List.of(),
                 sourceType, null, null, "ok", "text-embedding-v3",
-                Instant.now(), null, false, 0, 0, 0, Instant.now(), Instant.now()
+                Instant.now(), null, false, 0, 0, 0, Instant.now(), Instant.now(), null
         );
     }
 
@@ -44,6 +45,6 @@ public record KnowledgeArticle(
         return new KnowledgeArticle(id, title, content, contentJson, category, tags,
                 sourceType, sourceDocId, chunkIndex, chunkStatus, embeddingModel,
                 effectiveFrom, effectiveUntil, deprecated, hitCount, helpfulCount,
-                unhelpfulCount, createdAt, Instant.now());
+                unhelpfulCount, createdAt, Instant.now(), similarity);
     }
 }

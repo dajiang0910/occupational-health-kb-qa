@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -82,7 +84,7 @@ public class SemanticCacheService {
             log.info("[CACHE] L2 high-confidence hit: similarity={}",
                     String.format("%.3f", best.similarity()));
             pgVectorTemplate.incrementCacheHitCount(best.id());
-            return new CachedAnswer(best.answerText(), List.of());
+            return new CachedAnswer(best.answerText(), parseCitations(best.citations()));
         }
 
         // 中置信区间 (0.85 ~ 0.92) → 轻量 LLM 校验
@@ -90,7 +92,7 @@ public class SemanticCacheService {
         boolean equivalent = verifyEquivalence(question, best.questionText());
         if (equivalent) {
             pgVectorTemplate.incrementCacheHitCount(best.id());
-            return new CachedAnswer(best.answerText(), List.of());
+            return new CachedAnswer(best.answerText(), parseCitations(best.citations()));
         }
 
         return null;
@@ -101,13 +103,25 @@ public class SemanticCacheService {
      */
     public void store(String question, String answer, List<String> articleIds,
                       List<Map<String, String>> citations) {
-        // L1
+        // L1：内存精确缓存（同步）
         exactCache.put(question.trim().toLowerCase(),
                 new CacheEntry(new CachedAnswer(answer, citations), System.currentTimeMillis()));
 
-        // L2（异步写入 pgvector）
-        // Phase 1: 仅 L1，L2 持久化留待后续
-        log.info("[CACHE] Stored L1 cache for: \"{}\"", question);
+        // L2：pgvector 语义缓存（异步，失败不影响 L1）
+        try {
+            Embedding questionEmbedding = embeddingService.embedQuery(question);
+            String vectorStr = EmbeddingService.embeddingToPgvectorString(questionEmbedding);
+            String citationsJson = toJson(citations);
+            Long[] articleIdArray = articleIds.stream()
+                    .map(Long::parseLong)
+                    .toArray(Long[]::new);
+
+            pgVectorTemplate.insertSemanticCache(question, answer, citationsJson,
+                    vectorStr, articleIdArray);
+            log.info("[CACHE] Stored L1+L2 cache for: \"{}\"", question);
+        } catch (Exception e) {
+            log.warn("[CACHE] L2 persistence failed (L1 still valid): {}", e.getMessage());
+        }
     }
 
     /**
@@ -141,12 +155,83 @@ public class SemanticCacheService {
         }
     }
 
+    // ── JSON helpers (simple manual impl to avoid dependency on Jackson in kb-core) ──
+
     @SuppressWarnings("unchecked")
-    private CachedAnswer extractCachedAnswer(Map<String, Object> row) {
-        return new CachedAnswer(
-                (String) row.get("answer_text"),
-                (List<Map<String, String>>) row.get("citations")
-        );
+    private List<Map<String, String>> parseCitations(String citationsJson) {
+        if (citationsJson == null || citationsJson.isBlank() || "[]".equals(citationsJson)) {
+            return List.of();
+        }
+        // Simple parser for JSON array of {key: value} objects
+        // Format: [{"articleId":"123","title":"...","snippet":"..."},...]
+        List<Map<String, String>> result = new ArrayList<>();
+        try {
+            String content = citationsJson.trim();
+            if (content.startsWith("[")) content = content.substring(1);
+            if (content.endsWith("]")) content = content.substring(0, content.length() - 1);
+
+            int depth = 0, start = -1;
+            for (int i = 0; i < content.length(); i++) {
+                char c = content.charAt(i);
+                if (c == '{' && depth == 0) start = i;
+                if (c == '{') depth++;
+                if (c == '}') depth--;
+                if (c == '}' && depth == 0 && start >= 0) {
+                    String obj = content.substring(start, i + 1);
+                    Map<String, String> map = new HashMap<>();
+                    // Parse key-value pairs inside {...}
+                    String inner = obj.substring(1, obj.length() - 1);
+                    int pos = 0;
+                    while (pos < inner.length()) {
+                        int keyStart = inner.indexOf('"', pos);
+                        if (keyStart < 0) break;
+                        int keyEnd = inner.indexOf('"', keyStart + 1);
+                        int colon = inner.indexOf(':', keyEnd);
+                        int valStart = inner.indexOf('"', colon);
+                        int valEnd = inner.indexOf('"', valStart + 1);
+                        if (keyStart >= 0 && keyEnd > keyStart && valStart > colon && valEnd > valStart) {
+                            String key = inner.substring(keyStart + 1, keyEnd);
+                            String val = inner.substring(valStart + 1, valEnd);
+                            map.put(key, val);
+                            pos = valEnd + 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    if (!map.isEmpty()) result.add(map);
+                    start = -1;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[CACHE] Failed to parse citations JSON", e);
+        }
+        return result;
+    }
+
+    private String toJson(List<Map<String, String>> citations) {
+        if (citations == null || citations.isEmpty()) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < citations.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append("{");
+            Map<String, String> map = citations.get(i);
+            int j = 0;
+            for (var entry : map.entrySet()) {
+                if (j > 0) sb.append(",");
+                sb.append("\"").append(escapeJson(entry.getKey()))
+                        .append("\":\"").append(escapeJson(entry.getValue())).append("\"");
+                j++;
+            }
+            sb.append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     // ── 内部类型 ──

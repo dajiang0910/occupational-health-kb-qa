@@ -52,6 +52,7 @@ public class RagPipelineImpl implements RagPipeline {
     private final CitationVerifier citationVerifier;
     private final ConfidenceCalculator confidenceCalc;
     private final TokenBudgetManager tokenBudget;
+    private final Reranker reranker;
 
     // ── 配置 ──
     private final int retrievalTopK;
@@ -64,6 +65,7 @@ public class RagPipelineImpl implements RagPipeline {
             KnowledgeArticleRepository articleRepo,
             EmbeddingService embeddingService,
             BailianClient llmClient,
+            Reranker reranker,
             @Value("${app.rag.retriever.top-k:20}") int retrievalTopK,
             @Value("${app.rag.retriever.reranker-min-similarity:0.8}") double rerankerMinSimilarity,
             @Value("${app.rag.confidence.thresholds.factual:0.80}") double factualThreshold,
@@ -75,6 +77,7 @@ public class RagPipelineImpl implements RagPipeline {
         this.articleRepo = articleRepo;
         this.embeddingService = embeddingService;
         this.llmClient = llmClient;
+        this.reranker = reranker;
         this.intentClassifier = new IntentClassifier(llmClient);
         this.citationVerifier = new CitationVerifier(llmClient);
         this.confidenceCalc = new ConfidenceCalculator(
@@ -130,12 +133,12 @@ public class RagPipelineImpl implements RagPipeline {
             }
 
             // ── Step 4: [条件] Reranker ──
-            List<KnowledgeArticle> topArticles = candidates;
+            List<KnowledgeArticle> topArticles;
             double top1Similarity = estimateCosineSimilarity(questionEmbedding, candidates.get(0));
 
             if (top1Similarity < rerankerMinSimilarity && candidates.size() > 5) {
-                // 启用 Reranker（Cross-encoder 重排序）
-                topArticles = rerank(candidates, request.question(), 5);
+                // 启用 Reranker（Embedding 相似度 + LLM Cross-encoder 组合）
+                topArticles = reranker.rerank(candidates, request.question());
                 log.info("[RAG] Reranker applied: top1_sim={} < {} → Top-{}",
                         String.format("%.3f", top1Similarity), rerankerMinSimilarity,
                         topArticles.size());
@@ -236,17 +239,8 @@ public class RagPipelineImpl implements RagPipeline {
     }
 
     private double estimateCosineSimilarity(Embedding q, KnowledgeArticle article) {
-        // Phase 1：简化实现，使用 pgvector <=> 距离（1 - distance = similarity）
-        // Phase 2：实际计算余弦相似度
-        return 0.85; // 占位（实际从 pgvector 查询结果中获取）
-    }
-
-    private List<KnowledgeArticle> rerank(List<KnowledgeArticle> candidates,
-                                          String question, int topN) {
-        // Phase 1：简单截断 Top-N（Phase 2 集成 Cross-encoder）
-        return candidates.stream()
-                .limit(topN)
-                .collect(Collectors.toList());
+        // 使用 pgvector 查询结果中已计算的余弦相似度（1 - cosine_distance）
+        return article.similarity() != null ? article.similarity() : 0.0;
     }
 
     private List<RagResult.Citation> buildCitations(List<KnowledgeArticle> articles) {

@@ -1,5 +1,6 @@
 package com.ohkb.api.controller;
 
+import com.ohkb.core.chat.FeedbackClassifier;
 import com.ohkb.core.rag.RagPipeline;
 import com.ohkb.core.rag.RagRequest;
 import com.ohkb.core.rag.RagResult;
@@ -27,10 +28,12 @@ public class ChatController {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
     private final RagPipeline ragPipeline;
+    private final FeedbackClassifier feedbackClassifier;
     private final ExecutorService sseExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    public ChatController(RagPipeline ragPipeline) {
+    public ChatController(RagPipeline ragPipeline, FeedbackClassifier feedbackClassifier) {
         this.ragPipeline = ragPipeline;
+        this.feedbackClassifier = feedbackClassifier;
     }
 
     /**
@@ -104,17 +107,32 @@ public class ChatController {
     }
 
     /**
-     * 提交回答反馈（@Async 自动分类归因）。
+     * 提交回答反馈（@Async LLM 自动分类归因）。
+     * <p>
+     * 用户提交的 category 是初步分类，FeedbackClassifier 做二次校验和修正。
      */
     @PostMapping("/messages/{messageId}/feedback")
-    public Map<String, String> submitFeedback(
+    public Map<String, Object> submitFeedback(
             @PathVariable String messageId,
             @RequestBody FeedbackRequest request
     ) {
         log.info("[FEEDBACK] messageId={}, feedback={}, category={}, note={}",
                 messageId, request.feedback(), request.category(), request.note());
-        // TODO: @Async LLM 自动分类归因
-        return Map.of("status", "ok", "messageId", messageId);
+
+        // @Async LLM 自动分类归因（不阻塞响应）
+        if ("unhelpful".equals(request.feedback())) {
+            feedbackClassifier.classify(
+                    "", // TODO: 从 conversation store 获取原始问题
+                    "", // TODO: 从 conversation store 获取 AI 回答
+                    request.note()
+            ).thenAccept(category -> {
+                log.info("[FEEDBACK] Auto-classified: messageId={}, category={}", messageId, category);
+                // TODO: 更新 messages 表的 feedback_category 字段
+            });
+        }
+
+        return Map.of("status", "ok", "messageId", messageId,
+                "autoClassified", "unhelpful".equals(request.feedback()));
     }
 
     // ── 请求/响应 DTO ──

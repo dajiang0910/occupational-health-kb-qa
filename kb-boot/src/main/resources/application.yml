@@ -96,6 +96,9 @@ app:
       ttl-minutes: 30
   wechat:
     timeout-seconds: 5                   # 企微端硬超时
+    user-window-minutes: 5               # 用户活跃窗口（分钟）
+    thread-ttl-minutes: 30               # 用户线程 TTL（分钟）
+    max-threads-per-group: 50            # 每群最大线程数
     rate-limit:
       user-per-minute: 3
       group-per-minute: 10
@@ -138,3 +141,9 @@ logging:
     com.ohkb: ${LOG_LEVEL:INFO}
     dev.langchain4j: WARN
     org.springframework.web: WARN
+
+# -- 企业微信 --
+wechat:
+  token: ${WECHAT_TOKEN:}
+  encoding-aes-key: ${WECHAT_ENCODING_AES_KEY:}
+  corp-id: ${WECHAT_CORP_ID:}
