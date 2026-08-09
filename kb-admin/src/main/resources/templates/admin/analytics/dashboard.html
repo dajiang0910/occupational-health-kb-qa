@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<div>
+    <h2 class="text-2xl font-bold text-gray-900 mb-4">📊 数据分析</h2>
+
+    <!-- 概览卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <p class="text-sm text-gray-500">今日提问数</p>
+            <p class="text-3xl font-bold text-blue-600">--</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <p class="text-sm text-gray-500">回答满意率</p>
+            <p class="text-3xl font-bold text-green-600">--%</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <p class="text-sm text-gray-500">平均响应时间</p>
+            <p class="text-3xl font-bold text-yellow-600">--ms</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <p class="text-sm text-gray-500">缓存命中率</p>
+            <p class="text-3xl font-bold text-purple-600">--%</p>
+        </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- 高频问题 Top 10 -->
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <h3 class="font-semibold text-gray-900 mb-3">高频问题 Top 10</h3>
+            <canvas id="top-questions-chart"></canvas>
+        </div>
+
+        <!-- 按模块分布 -->
+        <div class="bg-white rounded-lg shadow-sm p-4">
+            <h3 class="font-semibold text-gray-900 mb-3">按模块问题分布</h3>
+            <canvas id="module-chart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // 占位图表（Phase 1 数据从 /api/analytics/dashboard 加载）
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctx1 = document.getElementById('top-questions-chart');
+            if (ctx1) {
+                new Chart(ctx1, {
+                    type: 'bar',
+                    data: { labels: ['--', '--', '--', '--', '--'],
+                        datasets: [{ label: '提问次数', data: [0, 0, 0, 0, 0],
+                            backgroundColor: '#3b82f6' }] },
+                    options: { responsive: true, plugins: { legend: { display: false } } }
+                });
+            }
+            const ctx2 = document.getElementById('module-chart');
+            if (ctx2) {
+                new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: { labels: ['项目申报', '现场调查', '检测采样', '评价报告', '项目公示', '系统设置'],
+                        datasets: [{ data: [0, 0, 0, 0, 0, 0],
+                            backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#6b7280'] }] },
+                    options: { responsive: true }
+                });
+            }
+        });
+    </script>
+</div>

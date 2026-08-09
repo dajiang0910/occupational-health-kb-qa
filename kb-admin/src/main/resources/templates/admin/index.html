@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OHKB Admin — 管理后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- 顶部导航 -->
+<nav class="bg-white shadow-sm border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+            <div class="flex items-center space-x-8">
+                <h1 class="text-xl font-bold text-gray-900">
+                    🏥 OHKB Admin
+                </h1>
+                <div class="flex space-x-1">
+                    <a href="/admin/kb"
+                       class="px-4 py-2 text-sm font-medium rounded-md"
+                       th:classappend="${#strings.startsWith(currentPage, 'kb')} ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'">
+                        📚 知识库
+                    </a>
+                    <a href="/admin/tickets"
+                       class="px-4 py-2 text-sm font-medium rounded-md"
+                       th:classappend="${#strings.startsWith(currentPage, 'tickets')} ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'">
+                        🎫 工单
+                    </a>
+                    <a href="/admin/analytics"
+                       class="px-4 py-2 text-sm font-medium rounded-md"
+                       th:classappend="${#strings.startsWith(currentPage, 'analytics')} ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'">
+                        📊 分析
+                    </a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span id="new-ticket-count" class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full"
+                      hx-get="/api/tickets?status=pending"
+                      hx-trigger="every 30s"
+                      hx-swap="innerHTML">
+                    --
+                </span>
+                <span class="text-sm text-gray-500">管理员</span>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- 页面内容（HTMX 局部刷新） -->
+<main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
+      hx-get="/admin/kb"
+      hx-trigger="load"
+      hx-swap="innerHTML">
+    <div class="flex items-center justify-center h-64">
+        <p class="text-gray-400">加载中...</p>
+    </div>
+</main>
+
+<!-- Toast 通知容器 -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+</body>
+</html>

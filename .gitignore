@@ -1,0 +1,38 @@
+# === Java / Maven ===
+target/
+*.class
+*.jar
+*.war
+
+# === Spring Boot ===
+logs/
+*.log
+
+# === IntelliJ IDEA ===
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# === VS Code ===
+.vscode/
+
+# === Java (macOS/Windows) ===
+.DS_Store
+Thumbs.db
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+
+# === Node.js (kb-chat-sdk) ===
+node_modules/
+dist/
+
+# === Knowledge base source documents (large, not code) ===
+*.docx
+*.doc
+
+# === Testing ===
+*.test-output

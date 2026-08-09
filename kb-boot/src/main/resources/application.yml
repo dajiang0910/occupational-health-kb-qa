@@ -1,0 +1,140 @@
+spring:
+  application:
+    name: ohkb-qa
+  threads:
+    virtual:
+      enabled: true                       # Java 21 Virtual Threads
+
+  # -- 数据源 --
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ohkb?ApplicationName=ohkb-qa
+    username: ${DB_USERNAME:ohkb}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+
+  # -- 文件上传 --
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+  # -- Thymeleaf --
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    cache: false                          # 开发期关闭缓存
+
+# -- Tomcat --
+server:
+  port: ${PORT:8080}
+  tomcat:
+    max-connections: 2000
+    threads:
+      max: 200
+
+# -- LangChain4j --
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${DASHSCOPE_API_KEY:}
+      model-name: ${LLM_MODEL:qwen-plus}
+      temperature: 0.7
+      max-tokens: 2048
+      timeout: 30s
+      max-retries: 2
+      log-requests: false
+      log-responses: false
+    streaming-chat-model:
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${DASHSCOPE_API_KEY:}
+      model-name: ${LLM_MODEL:qwen-plus}
+      temperature: 0.7
+      max-tokens: 2048
+      timeout: 30s
+    embedding-model:
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${DASHSCOPE_API_KEY:}
+      model-name: text-embedding-v3
+
+# -- 应用配置 --
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    expiration-minutes: 5               # JWT 有效期（分钟）
+  rag:
+    confidence:
+      llm-weight: 0.4                   # LLM 自评权重
+      retrieval-weight: 0.6             # 检索相似度权重
+      thresholds:
+        factual: 0.80
+        howto: 0.65
+        troubleshoot: 0.50
+    retriever:
+      top-k: 20
+      similarity-threshold: 0.7
+      reranker-enabled: true
+      reranker-min-similarity: 0.8      # Top-1 < 0.8 时启用 Reranker
+    token-budget:
+      system-prompt: 500
+      retrieved-docs: 2000
+      chat-history: 2000
+      current-answer: 1500
+      max-window-tokens: 6000
+      compression-threshold-rounds: 6
+  cache:
+    semantic:
+      enabled: true
+      high-threshold: 0.92               # 直接返回缓存
+      low-threshold: 0.85                # LLM 二次校验
+      ttl-minutes: 30
+    exact:
+      enabled: true
+      ttl-minutes: 30
+  wechat:
+    timeout-seconds: 5                   # 企微端硬超时
+    rate-limit:
+      user-per-minute: 3
+      group-per-minute: 10
+      global-qps: 50
+    degrade:
+      max-consecutive-mistriggers: 3     # 连续误触发次数阈值
+      mistrigger-window-minutes: 10
+    sensitive-keywords:
+      - 内部报价
+      - 客户名单
+      - 商业机密
+  document:
+    chunk-size: 512
+    chunk-overlap: 50
+    supported-formats:
+      - pdf
+      - docx
+      - md
+      - txt
+      - xlsx
+  degrade:
+    llm-probe-interval-seconds: 30      # LLM 探活间隔
+    max-consecutive-failures: 3          # 触发降级的连续失败次数
+
+# -- Actuator --
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# -- 日志 --
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    com.ohkb: ${LOG_LEVEL:INFO}
+    dev.langchain4j: WARN
+    org.springframework.web: WARN

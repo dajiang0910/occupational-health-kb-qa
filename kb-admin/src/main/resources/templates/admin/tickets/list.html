@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<div>
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold text-gray-900">🎫 工单管理</h2>
+        <div class="flex space-x-2">
+            <span class="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">待处理: --</span>
+            <span class="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">已认领: --</span>
+            <span class="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">已解决: --</span>
+        </div>
+    </div>
+
+    <!-- 工单列表 -->
+    <div id="ticket-list" class="bg-white rounded-lg shadow-sm divide-y divide-gray-200"
+         hx-get="/api/tickets"
+         hx-trigger="load, every 30s"
+         hx-swap="innerHTML">
+        <div class="p-8 text-center text-gray-400">
+            <p>工单列表（开发阶段占位）</p>
+            <p class="text-sm mt-1">连接数据库后将展示实际数据</p>
+        </div>
+    </div>
+</div>
